@@ -1,10 +1,9 @@
 // =========================================================================
-// SCRIPT.JS FINAL: Conectado a Google Apps Script
+// SCRIPT.JS FINAL: Conectado a Google Apps Script (Versión para GitHub Pages)
 // =========================================================================
 
-// ¡ATENCIÓN! ESTA ES LA URL DE TU APLICACIÓN WEB DE GOOGLE APPS SCRIPT.
-// Si el error CORS regresa, debes REDESPLEGAR y actualizar esta URL.
-const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzae2eff0v8HSli3RLXK1sQkdIRKN1m6aOm2A_9W84p7PEt5Fjr4bCPfu0LUxlqNZUckA/exec'; 
+// ¡ATENCIÓN! ESTA ES LA URL QUE DEBE COINCIDIR CON TU ÚLTIMO DESPLIEGUE.
+const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytnZfERd2ARnuS23nD0RLYpfqKsqp7poVcjo4ygqW4zIle9HhXGmaOtB4tXcrzkJY7rg/exec'; 
 
 let codigoContador = 1; 
 
@@ -25,11 +24,9 @@ const categoriaSelect = D('categoria'),
       resultadoBusquedaBody = D('resultadoBusqueda'); 
 
 // ... LÓGICA DINÁMICA DE CATEGORÍAS ...
-
 const actualizarSubcategorias = () => {
     const cat = categoriaSelect.value;
     subcategoriaSelect.innerHTML = '<option value="" disabled selected>Seleccione una subcategoría</option>';
-
     if (cat && subcategoriasMap[cat]) {
         subcategoriaSelect.disabled = false;
         subcategoriasMap[cat].forEach(subcat => {
@@ -42,13 +39,10 @@ const actualizarSubcategorias = () => {
         subcategoriaSelect.disabled = true;
     }
 }
-
 categoriaSelect?.addEventListener('change', actualizarSubcategorias);
 
 // ... LÓGICA DE GENERACIÓN DE CÓDIGO Y SERIE ...
-
 const getAlphaNum = (str, len) => str.replace(/[^a-zA-Z0-9]/g, '').substring(0, len).toUpperCase();
-
 const generarSerieAutomatica = (serieIngresada, nombreEquipo) => {
     if (serieIngresada.trim() !== "") return serieIngresada;
     const prefijo = getAlphaNum(nombreEquipo, 2) || 'Z'; 
@@ -56,7 +50,6 @@ const generarSerieAutomatica = (serieIngresada, nombreEquipo) => {
     const randomPart = Math.floor(Math.random() * 10).toString(); 
     return `${prefijo}${datePart}${randomPart}`;
 }
-
 const generarCodigoInventario = (datos) => {
     const cat = getAlphaNum(datos.categoria, 3);
     const subcat = getAlphaNum(datos.subcategoria, 3);
@@ -66,19 +59,8 @@ const generarCodigoInventario = (datos) => {
 }
 
 // =========================================================================
-// MOTOR DE BÚSQUEDA (FINAL: ESPERANDO JSON)
+// MOTOR DE BÚSQUEDA (FINAL Y LIMPIO)
 // =========================================================================
-
-window.handleSearchResults = (resultados) => {
-    // Muestra los resultados una vez que el script de Google se ha ejecutado
-    mostrarResultados(resultados);
-    
-    // Limpia la etiqueta script inyectada para no saturar el DOM
-    const scriptTag = document.getElementById('jsonpScript');
-    if (scriptTag) {
-        scriptTag.remove();
-    }
-};
 
 window.buscarProducto = async () => {
     const termino = D('terminoBusqueda').value.trim();
@@ -97,11 +79,10 @@ window.buscarProducto = async () => {
     try {
         const urlBusqueda = `${GOOGLE_APPS_SCRIPT_URL}?action=buscar&query=${encodeURIComponent(termino)}`;
 
-        // 🔥 CRÍTICO: fetch estándar (sin 'mode: no-cors' ni JSONP)
+        // 🔥 fetch estándar, que ahora DEBE funcionar en GitHub Pages gracias al backend.
         const response = await fetch(urlBusqueda); 
         
         if (response.ok) {
-            // Leer la respuesta como JSON
             const resultados = await response.json(); 
             mostrarResultados(resultados);
         } else {
@@ -110,8 +91,8 @@ window.buscarProducto = async () => {
 
     } catch (error) {
         console.error('Error al realizar la búsqueda:', error);
-        // Si sale este error aquí, verifica la Consola (F12) por un error CORS.
-        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">🔴 Error al conectar. Si ve CORS, debe redesplegar en Apps Script.</td></tr>';
+        // Si el error persiste, es una garantía de que el despliegue no se actualizó.
+        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">🔴 Error al conectar. ¡DEBE REDESPLEGAR EL APPS SCRIPT!</td></tr>';
     }
 }
 
@@ -231,15 +212,11 @@ registroForm?.addEventListener('submit', async function(e) {
 
 
 // ... LÓGICA DE DESCARGA CSV ...
-
 window.descargarCSV = () => {
     alert("La descarga CSV ha sido reemplazada. Los datos se guardan directamente en el Google Sheet centralizado en Google Drive.");
 }
-
 
 document.addEventListener('DOMContentLoaded', () => {
     actualizarSubcategorias();
     buscarProducto();
 });
-
-
