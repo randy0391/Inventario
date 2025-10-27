@@ -80,9 +80,9 @@ window.handleSearchResults = (resultados) => {
     }
 };
 
-window.buscarProducto = () => {
+window.buscarProducto = async () => {
     const termino = D('terminoBusqueda').value.trim();
-    resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">Cargando resultados vía JSONP...</td></tr>';
+    resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">Cargando resultados...</td></tr>';
 
     if (termino.length < 3 && termino.length !== 0) {
         resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-warning">Ingrese al menos 3 caracteres para buscar.</td></tr>';
@@ -94,26 +94,26 @@ window.buscarProducto = () => {
         return;
     }
 
-    // 1. Construir la URL con el parámetro JSONP 'callback'
-    const urlBusqueda = `${GOOGLE_APPS_SCRIPT_URL}?action=buscar&query=${encodeURIComponent(termino)}&callback=handleSearchResults`;
+    try {
+        const urlBusqueda = `${GOOGLE_APPS_SCRIPT_URL}?action=buscar&query=${encodeURIComponent(termino)}`;
 
-    // 2. Crear una nueva etiqueta script
-    let script = document.getElementById('jsonpScript');
-    if (script) {
-        script.remove(); // Eliminar la etiqueta anterior si existe
+        // 🔥 CRÍTICO: fetch estándar (sin 'mode: no-cors' ni JSONP)
+        const response = await fetch(urlBusqueda); 
+        
+        if (response.ok) {
+            // Leer la respuesta como JSON
+            const resultados = await response.json(); 
+            mostrarResultados(resultados);
+        } else {
+            throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
+        }
+
+    } catch (error) {
+        console.error('Error al realizar la búsqueda:', error);
+        // Si sale este error aquí, verifica la Consola (F12) por un error CORS.
+        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">🔴 Error al conectar. Si ve CORS, debe redesplegar en Apps Script.</td></tr>';
     }
-    
-    script = document.createElement('script');
-    script.src = urlBusqueda;
-    script.id = 'jsonpScript';
-    
-    // 3. Inyectar la etiqueta en el head o body para ejecutar la solicitud
-    document.getElementsByTagName('head')[0].appendChild(script);
-
-    // No se necesita try/catch de fetch, ya que ahora es una inyección de script.
-    // La función handleSearchResults manejará la respuesta.
-};
-// ... (El resto del código como 'mostrarResultados' y 'doPost' permanece igual) ...
+}
 
 const mostrarResultados = (data) => {
     if (data.length === 0) {
@@ -241,3 +241,4 @@ document.addEventListener('DOMContentLoaded', () => {
     actualizarSubcategorias();
     buscarProducto();
 });
+
