@@ -3,8 +3,8 @@
 // =========================================================================
 
 // ¡ATENCIÓN! ESTA ES LA URL DE TU APLICACIÓN WEB DE GOOGLE APPS SCRIPT.
-// Si el error CORS persiste, debes REDESPLEGAR y actualizar esta URL.
-const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzbCnlfEAPYHOyvNEfOaK_jcZXnveRSa7SHF6dQ9WJAlYKVgMTaNUhFZV78og5OXWRDXQ/exec'; 
+// Si el error CORS regresa, debes REDESPLEGAR y actualizar esta URL.
+const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzae2eff0v8HSli3RLXK1sQkdIRKN1m6aOm2A_9W84p7PEt5Fjr4bCPfu0LUxlqNZUckA/exec'; 
 
 let codigoContador = 1; 
 
@@ -24,7 +24,7 @@ const categoriaSelect = D('categoria'),
       registroForm = D('registroForm'),
       resultadoBusquedaBody = D('resultadoBusqueda'); 
 
-// ... LÓGICA DINÁMICA DE CATEGORÍAS (Sin cambios) ...
+// ... LÓGICA DINÁMICA DE CATEGORÍAS ...
 
 const actualizarSubcategorias = () => {
     const cat = categoriaSelect.value;
@@ -45,7 +45,7 @@ const actualizarSubcategorias = () => {
 
 categoriaSelect?.addEventListener('change', actualizarSubcategorias);
 
-// ... LÓGICA DE GENERACIÓN DE CÓDIGO Y SERIE (Sin cambios) ...
+// ... LÓGICA DE GENERACIÓN DE CÓDIGO Y SERIE ...
 
 const getAlphaNum = (str, len) => str.replace(/[^a-zA-Z0-9]/g, '').substring(0, len).toUpperCase();
 
@@ -66,18 +66,23 @@ const generarCodigoInventario = (datos) => {
 }
 
 // =========================================================================
-// MOTOR DE BÚSQUEDA (CORREGIDO Y FINALIZADO)
+// MOTOR DE BÚSQUEDA (FINAL: ESPERANDO JSON)
 // =========================================================================
 
-// En tu archivo script.js:
-// =========================================================================
-// MOTOR DE BÚSQUEDA (CORREGIDO PARA RESPONSE.TEXT)
-// =========================================================================
+window.handleSearchResults = (resultados) => {
+    // Muestra los resultados una vez que el script de Google se ha ejecutado
+    mostrarResultados(resultados);
+    
+    // Limpia la etiqueta script inyectada para no saturar el DOM
+    const scriptTag = document.getElementById('jsonpScript');
+    if (scriptTag) {
+        scriptTag.remove();
+    }
+};
 
-window.buscarProducto = async () => {
+window.buscarProducto = () => {
     const termino = D('terminoBusqueda').value.trim();
-    // Mantenemos el mensaje de carga, pero no podremos mostrar resultados.
-    resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">Iniciando búsqueda (Conexión forzada).</td></tr>'; 
+    resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">Cargando resultados vía JSONP...</td></tr>';
 
     if (termino.length < 3 && termino.length !== 0) {
         resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-warning">Ingrese al menos 3 caracteres para buscar.</td></tr>';
@@ -89,28 +94,26 @@ window.buscarProducto = async () => {
         return;
     }
 
-    try {
-        const urlBusqueda = `${GOOGLE_APPS_SCRIPT_URL}?action=buscar&query=${encodeURIComponent(termino)}`;
+    // 1. Construir la URL con el parámetro JSONP 'callback'
+    const urlBusqueda = `${GOOGLE_APPS_SCRIPT_URL}?action=buscar&query=${encodeURIComponent(termino)}&callback=handleSearchResults`;
 
-        // 🔥 CAMBIO CRÍTICO: Usamos 'no-cors' para eliminar el error. 
-        // ¡ADVERTENCIA! NO podremos leer la respuesta (no habrá resultados en la tabla).
-        const response = await fetch(urlBusqueda, {
-            method: 'GET',
-            mode: 'no-cors', // Detiene el error CORS
-            cache: 'no-cache'
-        }); 
-        
-        // Simplemente confirmamos que la solicitud se envió sin fallo de red.
-        resultadoBusquedaBody.innerHTML = `<tr><td colspan="6" class="text-center text-success">
-            ✅ Búsqueda enviada a Google Sheets. (Resultados no visibles debido a restricción de seguridad).
-        </td></tr>`;
-
-    } catch (error) {
-        console.error('Error al realizar la búsqueda:', error);
-        // Si sigue fallando aquí, es un error de red puro (cable desconectado, etc.)
-        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">🔴 ERROR de red irrecuperable.</td></tr>';
+    // 2. Crear una nueva etiqueta script
+    let script = document.getElementById('jsonpScript');
+    if (script) {
+        script.remove(); // Eliminar la etiqueta anterior si existe
     }
-}
+    
+    script = document.createElement('script');
+    script.src = urlBusqueda;
+    script.id = 'jsonpScript';
+    
+    // 3. Inyectar la etiqueta en el head o body para ejecutar la solicitud
+    document.getElementsByTagName('head')[0].appendChild(script);
+
+    // No se necesita try/catch de fetch, ya que ahora es una inyección de script.
+    // La función handleSearchResults manejará la respuesta.
+};
+// ... (El resto del código como 'mostrarResultados' y 'doPost' permanece igual) ...
 
 const mostrarResultados = (data) => {
     if (data.length === 0) {
@@ -137,7 +140,7 @@ const mostrarResultados = (data) => {
 
 
 // =========================================================================
-// LÓGICA DE GUARDADO (POST) - (Ajuste de error handling)
+// LÓGICA DE GUARDADO (POST) - Mantiene no-cors
 // =========================================================================
 
 registroForm?.addEventListener('submit', async function(e) {
@@ -198,8 +201,7 @@ registroForm?.addEventListener('submit', async function(e) {
     
     // 4. Enviar los datos
     try {
-        // Mantiene 'no-cors' para el POST ya que el servidor no puede leer headers personalizados
-        // y esta es la única forma de garantizar que el Apps Script reciba los datos.
+        // Mantiene 'no-cors' para el POST (Guardado)
         const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors', 
@@ -210,8 +212,7 @@ registroForm?.addEventListener('submit', async function(e) {
             body: JSON.stringify(dataToSend)
         });
         
-        // Dado que se usa 'no-cors', la respuesta HTTP es opaca (no se puede leer el JSON de éxito/error).
-        // Asumimos el éxito si el fetch no falló por error de red.
+        // Asumimos el éxito si no hay error de red
         alert(`✅ ¡Guardado! El registro se ha enviado a Google Sheets. Código: ${datos.codigo}`);
         codigoContador++; 
         
@@ -229,7 +230,7 @@ registroForm?.addEventListener('submit', async function(e) {
 });
 
 
-// ... LÓGICA DE DESCARGA CSV (Sin cambios) ...
+// ... LÓGICA DE DESCARGA CSV ...
 
 window.descargarCSV = () => {
     alert("La descarga CSV ha sido reemplazada. Los datos se guardan directamente en el Google Sheet centralizado en Google Drive.");
