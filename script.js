@@ -1,12 +1,9 @@
-// =========================================================================
-// SCRIPT.JS FINAL: Conectado a Google Apps Script (Versión para GitHub Pages)
-// =========================================================================
+// Array para almacenar todos los registros (Base de Datos Temporal en la Memoria del Navegador)
+let inventarioData = [];
+// Contador global para la generación de código numérico secuencial
+let codigoContador = 1;
 
-// ¡ATENCIÓN! ESTA ES LA URL QUE DEBE COINCIDIR CON TU ÚLTIMO DESPLIEGUE.
-const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytnZfERd2ARnuS23nD0RLYpfqKsqp7poVcjo4ygqW4zIle9HhXGmaOtB4tXcrzkJY7rg/exec'; 
-
-let codigoContador = 1; 
-
+// Estructura de Subcategorías Dinámicas (Compactada)
 const subcategoriasMap = {
     "EQUIPOS_DE_CÓMPUTO": ["LAPTOP", "PC_ESCRITORIO"],
     "PERIFÉRICOS": ["ENTRADA", "SALIDA", "ENTRADA/SALIDA", "PERIFERICO_DE_OFICINA"],
@@ -17,16 +14,28 @@ const subcategoriasMap = {
     "ACCESORIOS_DE_ENERGÍA": ["CARGADORES_DE_DISPOSITIVOS_MOVILES", "CARGADORES_DE_COMPUTADORAS", "CARGADORES_DE_RADIOS", "ESTABILIZADORES_DE_VOLTAJE", "CARGADORES_GENERALES"]
 };
 
+// Encabezados del CSV
+const CSV_HEADERS = [
+    "Código", "Categoría", "Subcategoría", "Nombre del Equipo", "Marca", "Modelo", 
+    "Serie", "Usuario", "CC", "Fecha de Adquisición", "Precio", "Ubicación", 
+    "Estado", "Estado de Asignación", "Observación"
+];
+
+// REFERENCIAS DEL DOM (Compactadas)
 const D = document.getElementById.bind(document);
 const categoriaSelect = D('categoria'),
       subcategoriaSelect = D('subcategoria'),
       registroForm = D('registroForm'),
       resultadoBusquedaBody = D('resultadoBusqueda'); 
 
-// ... LÓGICA DINÁMICA DE CATEGORÍAS ...
+// =========================================================================
+// LÓGICA DINÁMICA DE CATEGORÍAS
+// =========================================================================
+
 const actualizarSubcategorias = () => {
     const cat = categoriaSelect.value;
     subcategoriaSelect.innerHTML = '<option value="" disabled selected>Seleccione una subcategoría</option>';
+
     if (cat && subcategoriasMap[cat]) {
         subcategoriaSelect.disabled = false;
         subcategoriasMap[cat].forEach(subcat => {
@@ -39,183 +48,215 @@ const actualizarSubcategorias = () => {
         subcategoriaSelect.disabled = true;
     }
 }
+
 categoriaSelect?.addEventListener('change', actualizarSubcategorias);
 
-// ... LÓGICA DE GENERACIÓN DE CÓDIGO Y SERIE ...
+// =========================================================================
+// LÓGICA DE GENERACIÓN DE CÓDIGO Y SERIE (OPTIMIZADA)
+// =========================================================================
+
+// Función auxiliar para obtener N caracteres alfanuméricos de un texto
 const getAlphaNum = (str, len) => str.replace(/[^a-zA-Z0-9]/g, '').substring(0, len).toUpperCase();
+
+/**
+ * Genera la Serie Automática (Alfanumérica sin 'AUTO' ni 'X').
+ */
 const generarSerieAutomatica = (serieIngresada, nombreEquipo) => {
     if (serieIngresada.trim() !== "") return serieIngresada;
+
+    // Prefijo basado en las 2 primeras letras del nombre del equipo (si existen)
     const prefijo = getAlphaNum(nombreEquipo, 2) || 'Z'; 
-    const datePart = (Date.now() % 100000).toString().padStart(5, '0'); 
-    const randomPart = Math.floor(Math.random() * 10).toString(); 
-    return `${prefijo}${datePart}${randomPart}`;
+    // Generar un ID numérico de 6 dígitos basado en la fecha y un aleatorio.
+    const datePart = (Date.now() % 100000).toString().padStart(5, '0'); // Últimos 5 dígitos del timestamp
+    const randomPart = Math.floor(Math.random() * 10).toString(); // Un dígito aleatorio
+    
+    return `${prefijo}${datePart}${randomPart}`; // Ejemplo: LP3456789
 }
+
+/**
+ * Genera el código de inventario (sin 'X'). 
+ * Formato: [CAT_3]-[SUBCAT_3]-[MODELO_4]-[CONT_4]
+ */
 const generarCodigoInventario = (datos) => {
+    // Componente de Categoría (3 caracteres)
     const cat = getAlphaNum(datos.categoria, 3);
+    
+    // Componente de Subcategoría (3 caracteres)
     const subcat = getAlphaNum(datos.subcategoria, 3);
+
+    // Componente de Modelo (4 caracteres)
     const modelo = getAlphaNum(datos.modelo.trim() || datos.nombreEquipo.trim(), 4); 
+
+    // Componente Numérico Secuencial (4 dígitos)
     const numeroSecuencial = codigoContador.toString().padStart(4, '0');
+    
+    // Código final 
     return `${cat}-${subcat}-${modelo}-${numeroSecuencial}`;
 }
 
-// =========================================================================
-// MOTOR DE BÚSQUEDA (FINAL Y LIMPIO)
-// =========================================================================
-
-window.buscarProducto = async () => {
-    const termino = D('terminoBusqueda').value.trim();
-    resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">Cargando resultados...</td></tr>';
-
-    if (termino.length < 3 && termino.length !== 0) {
-        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-warning">Ingrese al menos 3 caracteres para buscar.</td></tr>';
-        return;
-    }
-    
-    if (termino === '') {
-        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Ingrese un término para iniciar la búsqueda.</td></tr>';
-        return;
-    }
-
-    try {
-        const urlBusqueda = `${GOOGLE_APPS_SCRIPT_URL}?action=buscar&query=${encodeURIComponent(termino)}`;
-
-        // 🔥 fetch estándar, que ahora DEBE funcionar en GitHub Pages gracias al backend.
-        const response = await fetch(urlBusqueda); 
-        
-        if (response.ok) {
-            const resultados = await response.json(); 
-            mostrarResultados(resultados);
-        } else {
-            throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`);
-        }
-
-    } catch (error) {
-        console.error('Error al realizar la búsqueda:', error);
-        // Si el error persiste, es una garantía de que el despliegue no se actualizó.
-        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">🔴 Error al conectar. ¡DEBE REDESPLEGAR EL APPS SCRIPT!</td></tr>';
-    }
+/**
+ * Valida si un equipo ya está registrado.
+ */
+const equipoYaRegistrado = (nombreEquipo, marca, modelo) => {
+    const [n, m, mod] = [nombreEquipo, marca, modelo].map(s => s.toUpperCase().trim());
+    return inventarioData.some(item => 
+        item['Nombre del Equipo'].toUpperCase().trim() === n &&
+        item['Marca'].toUpperCase().trim() === m &&
+        item['Modelo'].toUpperCase().trim() === mod
+    );
 }
 
-const mostrarResultados = (data) => {
-    if (data.length === 0) {
-        resultadoBusquedaBody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary">No se encontraron resultados para su búsqueda.</td></tr>';
-        return;
+// =========================================================================
+// MOTOR DE BÚSQUEDA
+// =========================================================================
+
+/**
+ * Filtra los productos y muestra SOLO los resultados de la búsqueda.
+ */
+window.buscarProducto = () => {
+    const termino = D('terminoBusqueda').value.toUpperCase().trim();
+    let html = '';
+
+    if (termino !== "") {
+        const resultados = inventarioData.filter(item => 
+            (item['Código'] + item['Nombre del Equipo'] + item['Marca'] + item['Modelo']).toUpperCase().includes(termino)
+        );
+
+        html = resultados.length > 0
+            ? resultados.map(item => `
+                <tr>
+                    <td>${item['Código']}</td>
+                    <td>${item['Nombre del Equipo']}</td>
+                    <td>${item['Marca']}</td>
+                    <td>${item['Modelo']}</td>
+                    <td>${item['Usuario'] || 'N/A'}</td>
+                    <td><span class="badge bg-${item['Estado'] === 'Operativo' ? 'success' : 'warning'}">${item['Estado']}</span></td>
+                </tr>
+            `).join('')
+            : `<tr><td colspan="6" class="text-center text-danger">No se encontraron productos con el término **"${termino}"**.</td></tr>`;
+    } else {
+        html = '<tr><td colspan="6" class="text-center text-muted">Ingrese un término en el campo de búsqueda para ver los resultados.</td></tr>';
     }
 
-    resultadoBusquedaBody.innerHTML = ''; 
-
-    data.forEach(item => {
-        const row = `
-            <tr>
-                <td>${item.Código || ''}</td>
-                <td>${item['Nombre del Equipo'] || ''}</td>
-                <td>${item.Marca || ''}</td>
-                <td>${item.Modelo || ''}</td>
-                <td>${item.Usuario || 'N/A'}</td>
-                <td>${item.Estado || 'N/A'}</td>
-            </tr>
-        `;
-        resultadoBusquedaBody.innerHTML += row;
-    });
+    resultadoBusquedaBody.innerHTML = html;
 }
 
 
 // =========================================================================
-// LÓGICA DE GUARDADO (POST) - Mantiene no-cors
+// LÓGICA DE GUARDADO (ENVÍO DEL FORMULARIO) - CORREGIDA
 // =========================================================================
 
-registroForm?.addEventListener('submit', async function(e) {
+registroForm?.addEventListener('submit', function(e) {
     e.preventDefault();
     e.stopPropagation();
     
     const form = e.target;
 
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated');
-        return;
-    }
+    if (form.checkValidity()) {
+        const datos = {
+            categoria: categoriaSelect.value,
+            subcategoria: subcategoriaSelect.value,
+            nombreEquipo: D('nombreEquipo').value,
+            marca: D('marca').value,
+            modelo: D('modelo').value,
+            serie: D('serie').value, 
+            usuario: D('usuario').value,
+            cc: D('cc').value,
+            fechaAdquisicion: D('fechaAdquisicion').value,
+            precio: D('precio').value,
+            ubicacion: D('ubicacion').value,
+            estado: D('estado').value,
+            estadoAsignacion: D('estadoAsignacion').value,
+            observacion: D('observacion').value
+        };
 
-    const btnGuardar = D('btnGuardar');
-    btnGuardar.disabled = true;
-    btnGuardar.textContent = 'Guardando...';
+        if (equipoYaRegistrado(datos.nombreEquipo, datos.marca, datos.modelo)) {
+            alert(`🔴 ¡ERROR! El equipo ${datos.nombreEquipo} - ${datos.modelo} ya está registrado.`);
+            return; 
+        }
 
-    // 1. Recoger datos
-    const datos = {
-        categoria: categoriaSelect.value,
-        subcategoria: subcategoriaSelect.value,
-        nombreEquipo: D('nombreEquipo').value,
-        marca: D('marca').value,
-        modelo: D('modelo').value,
-        serie: D('serie').value, 
-        usuario: D('usuario').value,
-        cc: D('cc').value,
-        fechaAdquisicion: D('fechaAdquisicion').value,
-        precio: D('precio').value,
-        ubicacion: D('ubicacion').value,
-        estado: D('estado').value,
-        estadoAsignacion: D('estadoAsignacion').value,
-        observacion: D('observacion').value
-    };
+        // 1. Generar Serie y Código
+        datos.serie = generarSerieAutomatica(datos.serie, datos.nombreEquipo);
+        const codigoGenerado = generarCodigoInventario(datos);
 
-    // 2. Generar Serie y Código
-    datos.serie = generarSerieAutomatica(datos.serie, datos.nombreEquipo);
-    datos.codigo = generarCodigoInventario(datos);
-    
-    // 3. Crear el objeto de datos FINAL
-    const dataToSend = {
-        'Código': datos.codigo,
-        'Categoría': datos.categoria.replace(/_/g, ' '),
-        'Subcategoría': datos.subcategoria.replace(/_/g, ' '),
-        'Nombre del Equipo': datos.nombreEquipo,
-        'Marca': datos.marca,
-        'Modelo': datos.modelo,
-        'Serie': datos.serie,
-        'Usuario': datos.usuario,
-        'CC': datos.cc,
-        'Fecha de Adquisición': datos.fechaAdquisicion,
-        'Precio': datos.precio,
-        'Ubicación': datos.ubicacion,
-        'Estado': datos.estado,
-        'Estado de Asignación': datos.estadoAsignacion,
-        'Observación': datos.observacion
-    };
-    
-    // 4. Enviar los datos
-    try {
-        // Mantiene 'no-cors' para el POST (Guardado)
-        const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors', 
-            cache: 'no-cache',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
-        });
-        
-        // Asumimos el éxito si no hay error de red
-        alert(`✅ ¡Guardado! El registro se ha enviado a Google Sheets. Código: ${datos.codigo}`);
+        // 2. Creación del Objeto de Producto Final (Mapeo explícito y CORREGIDO)
+        const productoFinal = {
+            'Código': codigoGenerado,
+            'Categoría': datos.categoria.replace(/_/g, ' '),
+            'Subcategoría': datos.subcategoria.replace(/_/g, ' '),
+            'Nombre del Equipo': datos.nombreEquipo,
+            'Marca': datos.marca,
+            'Modelo': datos.modelo,
+            'Serie': datos.serie, // La serie solo se asigna aquí, corrigiendo la duplicación en CSV.
+            'Usuario': datos.usuario,
+            'CC': datos.cc,
+            'Fecha de Adquisición': datos.fechaAdquisicion,
+            'Precio': datos.precio,
+            'Ubicación': datos.ubicacion,
+            'Estado': datos.estado,
+            'Estado de Asignación': datos.estadoAsignacion,
+            'Observación': datos.observacion
+        };
+
+
+        inventarioData.push(productoFinal);
         codigoContador++; 
+        
+        alert(`✅ ¡Guardado! Código: ${codigoGenerado}`);
         
         form.reset();
         form.classList.remove('was-validated');
         actualizarSubcategorias();
+        buscarProducto();
 
-    } catch (error) {
-        console.error('Error al enviar datos:', error);
-        alert(`🔴 ERROR: Falló la conexión de red. Revisa la consola y tu URL de Apps Script. Detalle: ${error.message}`);
-    } finally {
-        btnGuardar.disabled = false;
-        btnGuardar.textContent = 'Guardar';
+    } else {
+        form.classList.add('was-validated');
     }
 });
 
 
-// ... LÓGICA DE DESCARGA CSV ...
+// =========================================================================
+// LÓGICA DE DESCARGA CSV
+// =========================================================================
+
 window.descargarCSV = () => {
-    alert("La descarga CSV ha sido reemplazada. Los datos se guardan directamente en el Google Sheet centralizado en Google Drive.");
+    if (inventarioData.length === 0) {
+        alert("No hay datos en el inventario para descargar.");
+        return;
+    }
+
+    const SEP = ";"; 
+    let csvContent = CSV_HEADERS.join(SEP) + "\n"; 
+
+    inventarioData.forEach(item => {
+        const row = CSV_HEADERS.map(header => {
+            let value = (item[header] || "").toString();
+            // Escapar el valor para CSV
+            if (value.includes(SEP) || value.includes('\n') || value.includes('"')) {
+                value = `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+        });
+        csvContent += row.join(SEP) + "\n";
+    });
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); 
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    link.href = url;
+    const fecha = new Date().toISOString().slice(0, 10).replace(/-/g, ''); 
+    link.download = `Inventario_Equipos_${fecha}.csv`;
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    alert(`💾 Descarga del inventario (${inventarioData.length} registros) iniciada.`);
 }
 
+// Inicializar al cargar el DOM
 document.addEventListener('DOMContentLoaded', () => {
     actualizarSubcategorias();
     buscarProducto();
